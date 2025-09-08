@@ -1,6 +1,5 @@
 # ADSBnear
-the lcd library is by Dan Halbert
-
+This project uses the excellent LCD library created by Dan Halbert. You can find it at:
 https://github.com/dhalbert/CircuitPython_LCD
 
-put ```lcd``` into ```D:CIRCUITPY/lib```
+place the ```lcd``` folder into your ```D:CIRCUITPY/lib``` directory
