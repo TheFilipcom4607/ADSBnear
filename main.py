@@ -13,18 +13,21 @@ from lcd.i2c_pcf8574_interface import I2CPCF8574Interface
 
 # ─────────────── USER SETTINGS ─────────────── #
 
-API_RADIUS_KM     = 7   # how far (km) to ask the API
-DISPLAY_RADIUS_KM = 10  # how far (km) to accept & show
+API_RADIUS_KM       = 7     # how far (nm? its weird) to ask the API
+DISPLAY_RADIUS_KM   = 10    # how far (km) to accept & show
 
-WIFI_SSID       = "CHANGEME"
-WIFI_PASSWORD   = "CHANGEME"
+WIFI_SSID           = "CHANGEME"
+WIFI_PASSWORD       = "CHANGEME"
 
-LATITUDE        = CHANGEME
-LONGITUDE       = CHANGEME
-POLL_SEC        = 3.0     # seconds between polls
+LATITUDE            = CHANGEME
+LONGITUDE           = CHANGEME
 
-LCD_I2C_ADDRESS = 0x27
-PLANE_TYPES_FILE = "/plane_types.json"
+POLL_SEC            = 4.0    # seconds between polls when a plane is displayed
+NO_PLANE_POLL_SEC   = 30.0   # seconds between polls when no plane is displayed
+ERROR_POLL_SEC      = 5.0    # seconds to wait on error before retrying
+
+LCD_I2C_ADDRESS     = 0x27
+PLANE_TYPES_FILE    = "/plane_types.json"
 
 # ─────────────── LCD SETUP ─────────────── #
 
@@ -88,7 +91,6 @@ def pad16(text):
     return (text + " " * 16)[:16]
 
 def format_lcd(ac):
-    # raw & sanitize
     lat    = to_float(ac.get("lat"))
     lon    = to_float(ac.get("lon"))
     gs_kn  = to_float(ac.get("gs"))
@@ -99,14 +101,11 @@ def format_lcd(ac):
     if math.isnan(alt_ft):
         alt_ft = 0.0
 
-    # integer km distance string
     dist = gc_distance_km(LATITUDE, LONGITUDE, lat, lon)
     dist_str = "--" if math.isnan(dist) else str(int(dist + 0.5))
 
-    # callsign (up to 7 raw chars)
     flt_raw = (ac.get("flight") or "????").strip()[:7]
 
-    # 4-char type code
     raw_type = (ac.get("t") or "").strip().upper()
     if not raw_type:
         type_code = "????"
@@ -115,15 +114,11 @@ def format_lcd(ac):
     else:
         type_code = raw_type + "?" * (4 - len(raw_type))
 
-    # Base string
     base = f"{flt_raw} {dist_str}km {type_code}"
-
-    # If too long, truncate callsign until fits
     while len(base) > 16 and len(flt_raw) > 1:
         flt_raw = flt_raw[:-1]
         base = f"{flt_raw} {dist_str}km {type_code}"
 
-    # If shorter than 16 → center it
     if len(base) < 16:
         pad_total = 16 - len(base)
         left_pad = pad_total // 2
@@ -132,7 +127,6 @@ def format_lcd(ac):
     else:
         line1 = base[:16]
 
-    # metric altitude & speed (always left aligned)
     alt_m  = ft_to_m(alt_ft)
     gs_kmh = kn_to_kmh(gs_kn)
     line2  = f"{int(alt_m+0.5):5d}m {int(gs_kmh+0.5):3d}km/h"
@@ -140,10 +134,7 @@ def format_lcd(ac):
 
     return line1, line2
 
-
-
 def format_console(ac):
-    # unchanged verbose log
     lat     = to_float(ac.get("lat"))
     lon     = to_float(ac.get("lon"))
     api_dst = to_float(ac.get("dst"))
@@ -188,8 +179,11 @@ def fetch_closest():
 while True:
     try:
         data = fetch_closest()
-        now  = time.localtime()
+        now = time.localtime()
         timestr = f"{now[3]:02d}:{now[4]:02d}:{now[5]:02d}"
+
+        # assume no plane until we display one
+        plane_displayed = False
 
         if data and data.get("ac"):
             ac = data["ac"][0]
@@ -197,35 +191,44 @@ while True:
             lon = to_float(ac.get("lon"))
             dist = gc_distance_km(LATITUDE, LONGITUDE, lat, lon)
 
-            if math.isnan(dist) or dist > DISPLAY_RADIUS_KM:
-                # no aircraft in display range
-                lcd.clear()
-                lcd.print("No planes within")
-                lcd.set_cursor_pos(1, 0)
-                lcd.print(f"{DISPLAY_RADIUS_KM}km | Scanning")
-                print(timestr, f"No aircraft within {DISPLAY_RADIUS_KM} km")
-            else:
-                # show the nearest
+            if not math.isnan(dist) and dist <= DISPLAY_RADIUS_KM:
+                # display the nearest aircraft
                 line1, line2 = format_lcd(ac)
                 lcd.clear()
                 lcd.print(line1)
                 lcd.set_cursor_pos(1, 0)
                 lcd.print(line2)
                 print(timestr, format_console(ac))
-
+                plane_displayed = True
+            else:
+                # no aircraft in display radius
+                lcd.clear()
+                lcd.print("No planes within")
+                lcd.set_cursor_pos(1, 0)
+                lcd.print(f"{DISPLAY_RADIUS_KM}km | Scanning")
+                print(timestr, f"No aircraft within {DISPLAY_RADIUS_KM} km")
         else:
+            # API returned no data or no 'ac' list
             lcd.clear()
             lcd.print("No planes within")
             lcd.set_cursor_pos(1, 0)
             lcd.print(f"{DISPLAY_RADIUS_KM}km | Scanning")
             print(timestr, f"No aircraft within {DISPLAY_RADIUS_KM} km")
 
+        # choose sleep interval based on whether we showed a plane
+        if plane_displayed:
+            next_poll = POLL_SEC
+        else:
+            next_poll = NO_PLANE_POLL_SEC
+
     except Exception as err:
+        # on any exception, show error and retry after ERROR_POLL_SEC
         print("ERROR:", err)
         lcd.clear()
         lcd.print("API / Wi-Fi Err")
         lcd.set_cursor_pos(1, 0)
         lcd.print("Retrying...")
-        time.sleep(5)
+        next_poll = ERROR_POLL_SEC
 
-    time.sleep(POLL_SEC)
+    # sleep before next API call
+    time.sleep(next_poll)
