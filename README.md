@@ -1,2 +1,2 @@
 # ADSBnear
-put ''lcd'' into ''D:CIRCUITPY/lib''
+put '''lcd''' into '''D:CIRCUITPY/lib'''
