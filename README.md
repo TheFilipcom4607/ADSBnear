@@ -2,7 +2,7 @@
 
 ![alt text](https://assets.thefilip.com/adsbnear.jpg)
 
-A CircuitPython project that displays the nearest aircraft on a 16×2 LCD screen using real-time ADS-B data. Perfect for aviation enthusiasts who want to know what's flying overhead!
+A CircuitPython project that displays the nearest aircraft on a 16×2 LCD screen using real-time ADS-B data. Perfect for aviation enthusiasts who want to know what's flying overhead without checking their phone 24/7.
 
 ## 🎯 What It Does
 
