@@ -1,6 +1,6 @@
 # ADSBnear ✈️
 
-![alt text](https://assets.thefilip.com/adsbnear.jpg)
+![alt text](https://assets.thefilip.com/adsbnear-v1.1.jpg)
 
 A CircuitPython project that displays the nearest aircraft on a 16×2 LCD screen using real-time ADS-B data. Perfect for aviation enthusiasts who want to know what's flying overhead without checking their phone 24/7.
 
@@ -106,6 +106,14 @@ print([hex(x) for x in i2c.scan()])
 | `ERROR_POLL_SEC` | 5.0 | Retry delay after API errors |
 | `LCD_I2C_ADDRESS` | 0x27 | I2C address of LCD backpack |
 | `PLANE_TYPES_FILE` | "/plane_types.json" | Aircraft database file path |
+
+## Changelog
+
+### v1.1
+Added arrow indicators after altitude numbers to show if planes are climbing ↗ or descending ↘
+
+### v1.0
+Initial release
 
 ## 🙏 Credits
 
