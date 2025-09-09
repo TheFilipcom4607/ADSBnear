@@ -110,7 +110,7 @@ print([hex(x) for x in i2c.scan()])
 ## Changelog
 
 ### v1.1
-Added arrow indicators after altitude numbers to show if planes are climbing ↗ or descending ↘
+Added arrow indicators after altitude numbers to show if planes are climbing ▲ or descending ▼
 
 ### v1.0
 Initial release
