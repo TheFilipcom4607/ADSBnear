@@ -109,6 +109,9 @@ print([hex(x) for x in i2c.scan()])
 
 ## Changelog
 
+### v1.2
+Added debug info. Change ```DEBUG_INFO = False``` to ```True``` in the config to enable.
+
 ### v1.1
 Added arrow indicators after altitude numbers to show if planes are climbing ▲ or descending ▼
 
