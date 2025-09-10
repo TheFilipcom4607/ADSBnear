@@ -29,6 +29,8 @@ ERROR_POLL_SEC      = 5.0    # seconds to wait on error before retrying
 LCD_I2C_ADDRESS     = 0x27
 PLANE_TYPES_FILE    = "/plane_types.json"
 
+DEBUG_INFO = True   # set True to enable debug messages
+
 # ─────────────── Arrows ─────────────── #
 
 UP_ARROW = [
@@ -78,11 +80,21 @@ lcd.print("    ADSBnear")
 lcd.set_cursor_pos(1, 0)
 lcd.print("  Connecting..")
 
+# ─────────────── DEBUG PRINT ─────────────── #
+
+def debug_print(*args, **kwargs):
+    if DEBUG_INFO:
+        print(*args, **kwargs)
+
 # ────────── WIFI & HTTP SESSION ────────── #
 
 wifi.radio.connect(WIFI_SSID, WIFI_PASSWORD)
 pool     = socketpool.SocketPool(wifi.radio)
 requests = adafruit_requests.Session(pool, ssl.create_default_context())
+debug_print("Connected to Wi-Fi")
+debug_print("My IP address:", wifi.radio.ipv4_address)
+debug_print("Router:", wifi.radio.ipv4_gateway)
+debug_print("DNS:", wifi.radio.ipv4_dns)
 
 # ──────── PLANE TYPE LOOKUP ────────── #
 
@@ -241,7 +253,11 @@ def format_console(ac):
 # ──────────────── MAIN LOOP ────────────────── #
 
 def fetch_closest():
-    return requests.get(api_url()).json()
+    url = api_url()
+    debug_print("Fetching URL:", url)
+    response = requests.get(url)
+    debug_print("Response status:", response.status_code)
+    return response.json()
 
 while True:
     try:
@@ -289,8 +305,8 @@ while True:
             next_poll = NO_PLANE_POLL_SEC
 
     except Exception as err:
-        # on any exception, show error and retry after ERROR_POLL_SEC
-        print("ERROR:", err)
+        debug_print("Exception details:", repr(err))
+        print("ERROR:", err)  # keep this visible even if DEBUG_INFO = False
         lcd.clear()
         lcd.print("API / Wi-Fi Err")
         lcd.set_cursor_pos(1, 0)
