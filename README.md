@@ -4,24 +4,24 @@
 
 A CircuitPython project that displays the nearest aircraft on a 16×2 LCD screen using real-time ADS-B data. Perfect for aviation enthusiasts who want to know what's flying overhead without checking their phone 24/7.
 
-## 🎯 What It Does
+## What It Does
 
 ADSBnear transforms your microcontroller into a live aircraft tracker that connects to the [adsb.lol API](https://adsb.lol) via Wi-Fi to fetch real-time aircraft positions near your location. Watch as planes appear and disappear from your personal radar scope, displaying the closest aircraft's vital information on a compact LCD with intelligent polling that adapts to air traffic activity.
 
-## 🛠 Hardware Requirements
+## Hardware Requirements
 
 - **Microcontroller:** CircuitPython-compatible board (Raspberry Pi Pico W, ESP32-S3, etc.)
 - **Display:** 16×2 LCD with I2C backpack (PCF8574)  
 - **Connection:** Wi-Fi capability
 - **Power:** USB power supply
 
-## 💡 Inspiration
+## Inspiration
 
 This project was inspired by [u/fil1983's "Nearest Aircraft Display"](https://www.reddit.com/r/ADSB/comments/1nb56ld/nearest_aircraft_display/) on Reddit. Their [original implementation](https://github.com/filbot/flight-display) features a beautiful large OLED display with advanced features.
 
 ADSBnear is a simplified, budget-friendly alternative using a basic 16×2 LCD (with about 1/3 of the features of the original setup) for those who want core aircraft tracking functionality without the complexity or price.
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Prepare Your Board
 Flash your microcontroller with the latest [CircuitPython firmware](https://circuitpython.org/downloads)
@@ -69,7 +69,7 @@ Copy `plane_types.json` for detailed aircraft names in console output (e.g., "Bo
 
 *Note: This only affects serial console output due to 16×2 display limitations.*
 
-## 🖥 Usage
+## Usage
 
 1. **Power on** your device
 2. **Connect** - Device automatically connects to Wi-Fi
@@ -78,7 +78,7 @@ Copy `plane_types.json` for detailed aircraft names in console output (e.g., "Bo
 5. **Smart Updates** - Polls every 4 seconds when aircraft present, every 30 seconds when skies are empty
 
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 - **No Wi-Fi connection:** Check SSID/password, ensure 2.4GHz network
@@ -95,7 +95,7 @@ i2c = busio.I2C(board.SCL, board.SDA)
 print([hex(x) for x in i2c.scan()])
 ```
 
-## 📊 Configuration Options
+## Configuration Options
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -118,7 +118,7 @@ Added arrow indicators after altitude numbers to show if planes are climbing ▲
 ### v1.0
 Initial release
 
-## 🙏 Credits
+## Credits
 
 - **Inspiration:** [u/fil1983](https://github.com/filbot/flight-display) - Original advanced aircraft display
 - **LCD Library:** [Dan Halbert](https://github.com/dhalbert/CircuitPython_LCD) - CircuitPython LCD library
