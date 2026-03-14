@@ -8,6 +8,10 @@ A CircuitPython project that displays the nearest aircraft on a 16×2 LCD screen
 
 ADSBnear transforms your microcontroller into a live aircraft tracker that connects to the [adsb.lol API](https://adsb.lol) via Wi-Fi to fetch real-time aircraft positions near your location. Watch as planes appear and disappear from your personal radar scope, displaying the closest aircraft's vital information on a compact LCD with intelligent polling that adapts to air traffic activity.
 
+## Roadmap
+
+Im currently adding support for local adsb feeders instead of pulling from an api
+
 ## Hardware Requirements
 
 - **Microcontroller:** CircuitPython-compatible board (Raspberry Pi Pico W, ESP32-S3, etc.)
