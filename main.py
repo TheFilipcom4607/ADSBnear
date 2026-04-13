@@ -250,7 +250,8 @@ def _build_line1(label, dist_str, type_code):
     Layout: [label slot][space][dist]km [type]
     The slot width = 16 - 1 - len(dist_str) - 3 - len(type_code)."""
     slot = max(1, 16 - 1 - len(dist_str) - 3 - len(type_code))
-    label = label[:slot].ljust(slot)   # trim if too long, pad if shorter
+    label = label[:slot]
+    label = label + " " * (slot - len(label))  # pad to fixed slot width
     return pad16(f"{label} {dist_str}km {type_code}")
 
 
