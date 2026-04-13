@@ -239,9 +239,9 @@ def format_lcd(ac):
         _last_alt = None
     elif _last_alt is not None:
         delta = alt_m - _last_alt
-        if delta > 20:
+        if delta > 5:
             arrow = chr(0)  # up
-        elif delta < -20:
+        elif delta < -5:
             arrow = chr(1)  # down
 
     _last_alt = alt_m
