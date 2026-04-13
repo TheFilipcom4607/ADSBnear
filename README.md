@@ -126,8 +126,11 @@ print([hex(x) for x in i2c.scan()])
 
 ## Changelog
 
+### v1.7
+- Route lookup now works with local feeders: when `ALTERNATE_ROUTE = True` and route data isn't in the aircraft JSON, the callsign is looked up via [adsbdb.com](https://api.adsbdb.com) (free, no key required). Results are cached per callsign so the API is only hit once per flight. SSL is automatically loaded when needed
+
 ### v1.6
-- Added `ALTERNATE_ROUTE` config option: when enabled, line 1 alternates every 2 seconds between the callsign (e.g. `SAS2945`) and the route (e.g. `WAW-CDG`). Works with any data source that provides route, origin/destination fields. Falls back to callsign-only if no route data is present
+- Added `ALTERNATE_ROUTE` config option: when enabled, line 1 alternates every 2 seconds between the callsign (e.g. `SAS2945`) and the route (e.g. `WAW-CDG`). Works with any data source that provides route or origin/destination fields. Falls back to callsign-only if no route data is present
 
 ### v1.5
 - Added `LOCAL_AC_MSG_RATE` config option: in local mode, replaces the speed field on the aircraft display line with the per-aircraft message rate (e.g. `2.4msg/s`) received from that specific transponder

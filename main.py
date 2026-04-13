@@ -105,6 +105,7 @@ _last_msg_time   = None   # time.monotonic() when that count was sampled
 _msg_rate        = None   # computed messages/sec (float)
 
 _ac_msg_tracker  = {}     # icao -> (last_count, last_time) for per-aircraft msg/s
+_route_cache     = {}     # callsign -> route string (or None) so we only fetch once
 
 # ─────────────── DEBUG PRINT ─────────────── #
 
@@ -117,7 +118,7 @@ def debug_print(*args, **kwargs):
 wifi.radio.connect(WIFI_SSID, WIFI_PASSWORD)
 pool = socketpool.SocketPool(wifi.radio)
 
-if DATA_SOURCE == "api":
+if DATA_SOURCE == "api" or ALTERNATE_ROUTE:
     import ssl
     ssl_ctx = ssl.create_default_context()
 else:
@@ -200,7 +201,7 @@ _last_alt = None
 _last_flight = None
 
 def get_route_str(ac):
-    """Return a ≤7-char route label like 'WAW-CDG', or None if unavailable."""
+    """Return a ≤7-char route label from aircraft data fields, or None."""
     # pre-formatted route field (e.g. adsb.lol, ADS-B Exchange)
     route = (ac.get("route") or "").strip()
     if route:
@@ -214,6 +215,31 @@ def get_route_str(ac):
     if dep and dst:
         return f"{dep[:3]}-{dst[:3]}"
     return None
+
+
+def fetch_route(callsign):
+    """Look up route via adsbdb.com. Returns 'ORIG-DEST' string or None.
+    Result is cached in _route_cache so each callsign is only fetched once."""
+    if not callsign or callsign == "????":
+        return None
+    if callsign in _route_cache:
+        return _route_cache[callsign]
+    result = None
+    try:
+        url = f"https://api.adsbdb.com/v0/callsign/{callsign}"
+        debug_print("Route lookup:", url)
+        resp = requests.get(url)
+        data = resp.json()
+        fr   = (data.get("response") or {}).get("flightroute") or {}
+        orig = ((fr.get("origin")      or {}).get("iata_code") or "").strip()
+        dest = ((fr.get("destination") or {}).get("iata_code") or "").strip()
+        if orig and dest:
+            result = f"{orig[:3]}-{dest[:3]}"
+        debug_print("Route result:", result)
+    except Exception as err:
+        debug_print("Route lookup failed:", err)
+    _route_cache[callsign] = result
+    return result
 
 
 def _build_line1(label, dist_str, type_code):
@@ -231,7 +257,7 @@ def _build_line1(label, dist_str, type_code):
     return base[:16]
 
 
-def format_lcd(ac, ac_msg_rate=None):
+def format_lcd(ac, ac_msg_rate=None, route=None):
     global _last_alt, _last_flight
 
     lat    = to_float(ac.get("lat"))
@@ -259,13 +285,8 @@ def format_lcd(ac, ac_msg_rate=None):
 
     line1 = _build_line1(flt_raw, dist_str, type_code)
 
-    # alternate line1 with route if enabled and route data is available
-    route_line1 = None
-    if ALTERNATE_ROUTE:
-        route = get_route_str(ac)
-        debug_print("Route:", route)
-        if route:
-            route_line1 = _build_line1(route, dist_str, type_code)
+    # build alternate line1 with route if one was provided
+    route_line1 = _build_line1(route, dist_str, type_code) if route else None
 
     # altitude & speed line with trend arrow
     alt_m  = ft_to_m(alt_ft)
@@ -443,7 +464,12 @@ while True:
                             ac_msg_rate = (ac_count - prev_count) / elapsed
                     if ac_count is not None:
                         _ac_msg_tracker[icao] = (ac_count, now_mono)
-                line1, line2, route_line1 = format_lcd(ac, ac_msg_rate)
+                # resolve route: JSON fields first, then cached API lookup
+                route = get_route_str(ac)
+                if route is None and ALTERNATE_ROUTE:
+                    flt_key = (ac.get("flight") or "").strip()
+                    route = fetch_route(flt_key)
+                line1, line2, route_line1 = format_lcd(ac, ac_msg_rate, route)
                 lcd.clear()
                 lcd.print(line1)
                 lcd.set_cursor_pos(1, 0)
