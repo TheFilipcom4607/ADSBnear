@@ -401,7 +401,7 @@ def show_no_planes():
 
     left2 = f"{_planes_seen} seen"
     if DATA_SOURCE == "local" and _msg_rate is not None:
-        right2 = f"{_msg_rate:.1f}msg/s"
+        right2 = f"{_msg_rate:.1f}msgs"
     else:
         right2 = f"Up:{fmt_duration(uptime)}"
     gap2 = max(16 - len(left2) - len(right2), 1)
