@@ -3,7 +3,7 @@
 ![alt text](https://assets.thefilip.com/adsbnear-v1.1.jpg)
 
 A CircuitPython project that displays the nearest aircraft on a 16×2 LCD screen using real-time ADS-B data. Perfect for aviation enthusiasts who want to know what's flying overhead without checking their phone 24/7.
-
+## V1.3 RELEASED! NOW YOU CAN DISPLAY DATA FROM YOUR LOCAL ADSB RECIEVER!
 ## What It Does
 
 ADSBnear transforms your microcontroller into a live aircraft tracker. It can pull data from the [adsb.lol API](https://adsb.lol) via Wi-Fi **or** from a local ADS-B receiver (dump1090, readsb, tar1090) on your network. Watch as planes appear and disappear from your personal radar scope, displaying the closest aircraft's vital information on a compact LCD with intelligent polling that adapts to air traffic activity.
