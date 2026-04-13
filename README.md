@@ -116,7 +116,9 @@ print([hex(x) for x in i2c.scan()])
 | `API_RADIUS_KM` | 7 | How far to search for aircraft (API mode) |
 | `LOCAL_ADSB_URL` | `"http://..."` | URL of local receiver JSON endpoint |
 | `LOCAL_AC_MSG_RATE` | `False` | Show per-aircraft msg/s instead of speed (local mode only) |
-| `ALTERNATE_ROUTE` | `False` | Alternate line 1 between callsign and route every 2 seconds |
+| `ALTERNATE_ROUTE` | `False` | Alternate line 1 between callsign and route |
+| `ROUTE_CALLSIGN_SEC` | `2.0` | Seconds to show callsign before switching to route |
+| `ROUTE_DISPLAY_SEC` | `2.0` | Seconds to show route before next fetch |
 | `DISPLAY_RADIUS_KM` | 10 | Maximum distance to display |
 | `POLL_SEC` | 4.0 | Update frequency when plane displayed |
 | `NO_PLANE_POLL_SEC` | 30.0 | Update frequency when no planes |
@@ -125,6 +127,10 @@ print([hex(x) for x in i2c.scan()])
 | `PLANE_TYPES_FILE` | "/plane_types.json" | Aircraft database file path |
 
 ## Changelog
+
+### v1.8
+- Fixed `ALTERNATE_ROUTE` timing: callsign and route durations are now controlled by `ROUTE_CALLSIGN_SEC` and `ROUTE_DISPLAY_SEC`, fully independent of the poll interval (old code tied route display time to `POLL_SEC` which could collapse to near-zero)
+- Fixed layout shift when alternating: distance and aircraft type are now pinned at fixed column positions regardless of label length — a 6-char callsign and 7-char route no longer cause the rest of the row to move
 
 ### v1.7
 - Route lookup now works with local feeders: when `ALTERNATE_ROUTE = True` and route data isn't in the aircraft JSON, the callsign is looked up via [adsbdb.com](https://api.adsbdb.com) (free, no key required). Results are cached per callsign so the API is only hit once per flight. SSL is automatically loaded when needed

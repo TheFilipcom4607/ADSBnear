@@ -25,7 +25,9 @@ API_RADIUS_KM       = 7       # search radius for API queries
 #   dump1090 (default): http://<ip>:8080/data/aircraft.json
 LOCAL_ADSB_URL      = "http://192.168.1.100/tar1090/data/aircraft.json"
 LOCAL_AC_MSG_RATE   = False   # show per-aircraft msg/s instead of speed (local mode only)
-ALTERNATE_ROUTE     = False   # alternate line 1 between callsign and route every 2s
+ALTERNATE_ROUTE     = False   # alternate line 1 between callsign and route
+ROUTE_CALLSIGN_SEC  = 2.0     # seconds to show callsign
+ROUTE_DISPLAY_SEC   = 2.0     # seconds to show route
 
 DISPLAY_RADIUS_KM   = 10      # max distance (km) to show on display
 
@@ -243,18 +245,13 @@ def fetch_route(callsign):
 
 
 def _build_line1(label, dist_str, type_code):
-    """Centre-pad a 16-char LCD line: '<label> <dist>km <type>'."""
-    label = label[:7]
-    base  = f"{label} {dist_str}km {type_code}"
-    while len(base) > 16 and len(label) > 1:
-        label = label[:-1]
-        base  = f"{label} {dist_str}km {type_code}"
-    if len(base) < 16:
-        pad_total = 16 - len(base)
-        left_pad  = pad_total // 2
-        right_pad = pad_total - left_pad
-        return " " * left_pad + base + " " * right_pad
-    return base[:16]
+    """Build a 16-char LCD line with a fixed-width label slot so that
+    dist and type stay pinned at the same position on every alternation.
+    Layout: [label slot][space][dist]km [type]
+    The slot width = 16 - 1 - len(dist_str) - 3 - len(type_code)."""
+    slot = max(1, 16 - 1 - len(dist_str) - 3 - len(type_code))
+    label = label[:slot].ljust(slot)   # trim if too long, pad if shorter
+    return pad16(f"{label} {dist_str}km {type_code}")
 
 
 def format_lcd(ac, ac_msg_rate=None, route=None):
@@ -498,13 +495,13 @@ while True:
         lcd.print("Retrying...")
         next_poll = ERROR_POLL_SEC
 
-    # alternate between callsign and route on line 1 during the poll interval
+    # alternate between callsign and route on line 1
     if ALTERNATE_ROUTE and plane_displayed and route_line1 and line2:
-        time.sleep(2.0)
+        time.sleep(ROUTE_CALLSIGN_SEC)
         lcd.clear()
         lcd.print(route_line1)
         lcd.set_cursor_pos(1, 0)
         lcd.print(line2)
-        time.sleep(max(0.0, next_poll - 2.0))
+        time.sleep(ROUTE_DISPLAY_SEC)
     else:
         time.sleep(next_poll)
