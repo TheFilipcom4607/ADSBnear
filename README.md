@@ -115,6 +115,7 @@ print([hex(x) for x in i2c.scan()])
 | `DATA_SOURCE` | `"api"` | `"api"` for adsb.lol, `"local"` for local receiver |
 | `API_RADIUS_KM` | 7 | How far to search for aircraft (API mode) |
 | `LOCAL_ADSB_URL` | `"http://..."` | URL of local receiver JSON endpoint |
+| `LOCAL_AC_MSG_RATE` | `False` | Show per-aircraft msg/s instead of speed (local mode only) |
 | `DISPLAY_RADIUS_KM` | 10 | Maximum distance to display |
 | `POLL_SEC` | 4.0 | Update frequency when plane displayed |
 | `NO_PLANE_POLL_SEC` | 30.0 | Update frequency when no planes |
@@ -123,6 +124,9 @@ print([hex(x) for x in i2c.scan()])
 | `PLANE_TYPES_FILE` | "/plane_types.json" | Aircraft database file path |
 
 ## Changelog
+
+### v1.5
+- Added `LOCAL_AC_MSG_RATE` config option: in local mode, replaces the speed field on the aircraft display line with the per-aircraft message rate (e.g. `2.4msg/s`) received from that specific transponder
 
 ### v1.4
 - In local mode, the idle screen now shows live feeder message rate (e.g. `2.4msg/s`) instead of uptime when no aircraft are in range

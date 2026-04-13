@@ -24,6 +24,7 @@ API_RADIUS_KM       = 7       # search radius for API queries
 #   dump1090-fa:        http://<ip>/dump1090-fa/data/aircraft.json
 #   dump1090 (default): http://<ip>:8080/data/aircraft.json
 LOCAL_ADSB_URL      = "http://192.168.1.100/tar1090/data/aircraft.json"
+LOCAL_AC_MSG_RATE   = False   # show per-aircraft msg/s instead of speed (local mode only)
 
 DISPLAY_RADIUS_KM   = 10      # max distance (km) to show on display
 
@@ -101,6 +102,8 @@ _last_seen_time  = None
 _last_msg_count  = None   # last raw message counter from local receiver
 _last_msg_time   = None   # time.monotonic() when that count was sampled
 _msg_rate        = None   # computed messages/sec (float)
+
+_ac_msg_tracker  = {}     # icao -> (last_count, last_time) for per-aircraft msg/s
 
 # ─────────────── DEBUG PRINT ─────────────── #
 
@@ -195,7 +198,7 @@ def pad16(text):
 _last_alt = None
 _last_flight = None
 
-def format_lcd(ac):
+def format_lcd(ac, ac_msg_rate=None):
     global _last_alt, _last_flight
 
     lat    = to_float(ac.get("lat"))
@@ -251,7 +254,14 @@ def format_lcd(ac):
     _last_alt = alt_m
     _last_flight = flt_raw
 
-    line2 = f"{int(alt_m + 0.5):5d}m{arrow} {int(gs_kmh + 0.5):3d}km/h"
+    if LOCAL_AC_MSG_RATE and ac_msg_rate is not None:
+        if ac_msg_rate < 10:
+            spd_str = f"{ac_msg_rate:.1f}msg/s"
+        else:
+            spd_str = f"{int(ac_msg_rate)}msg/s"
+    else:
+        spd_str = f"{int(gs_kmh + 0.5):3d}km/h"
+    line2 = f"{int(alt_m + 0.5):5d}m{arrow} {spd_str}"
     line2 = pad16(line2)
 
     return line1, line2
@@ -389,7 +399,19 @@ while True:
             dist = gc_distance_km(LATITUDE, LONGITUDE, lat, lon)
 
             if not math.isnan(dist) and dist <= DISPLAY_RADIUS_KM:
-                line1, line2 = format_lcd(ac)
+                ac_msg_rate = None
+                if LOCAL_AC_MSG_RATE:
+                    icao = ac.get("hex", "")
+                    ac_count = ac.get("messages")
+                    now_mono = time.monotonic()
+                    if ac_count is not None and icao in _ac_msg_tracker:
+                        prev_count, prev_time = _ac_msg_tracker[icao]
+                        elapsed = now_mono - prev_time
+                        if elapsed > 0:
+                            ac_msg_rate = (ac_count - prev_count) / elapsed
+                    if ac_count is not None:
+                        _ac_msg_tracker[icao] = (ac_count, now_mono)
+                line1, line2 = format_lcd(ac, ac_msg_rate)
                 lcd.clear()
                 lcd.print(line1)
                 lcd.set_cursor_pos(1, 0)
