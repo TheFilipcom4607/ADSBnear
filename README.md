@@ -6,11 +6,7 @@ A CircuitPython project that displays the nearest aircraft on a 16×2 LCD screen
 
 ## What It Does
 
-ADSBnear transforms your microcontroller into a live aircraft tracker that connects to the [adsb.lol API](https://adsb.lol) via Wi-Fi to fetch real-time aircraft positions near your location. Watch as planes appear and disappear from your personal radar scope, displaying the closest aircraft's vital information on a compact LCD with intelligent polling that adapts to air traffic activity.
-
-## Roadmap
-
-Im currently adding support for local adsb feeders instead of pulling from an api
+ADSBnear transforms your microcontroller into a live aircraft tracker. It can pull data from the [adsb.lol API](https://adsb.lol) via Wi-Fi **or** from a local ADS-B receiver (dump1090, readsb, tar1090) on your network. Watch as planes appear and disappear from your personal radar scope, displaying the closest aircraft's vital information on a compact LCD with intelligent polling that adapts to air traffic activity.
 
 ## Hardware Requirements
 
@@ -42,6 +38,19 @@ CIRCUITPY/
 Edit the configuration section at the top of `main.py`:
 
 ```python
+# Data source: "api" for adsb.lol, "local" for a local ADS-B receiver
+DATA_SOURCE = "api"
+
+# API settings (used when DATA_SOURCE = "api")
+API_RADIUS_KM = 7       # Search radius for API calls
+
+# Local receiver settings (used when DATA_SOURCE = "local")
+# Common URLs:
+#   tar1090 / readsb:  http://<ip>/tar1090/data/aircraft.json
+#   dump1090-fa:        http://<ip>/dump1090-fa/data/aircraft.json
+#   dump1090 (default): http://<ip>:8080/data/aircraft.json
+LOCAL_ADSB_URL = "http://192.168.1.100/tar1090/data/aircraft.json"
+
 # Network Configuration
 WIFI_SSID = "your_wifi_name"
 WIFI_PASSWORD = "your_wifi_password"
@@ -51,7 +60,6 @@ LATITUDE  = 52.16517  # Your latitude
 LONGITUDE = 20.96894  # Your longitude
 
 # Display Settings
-API_RADIUS_KM = 7      # Search radius for API calls
 DISPLAY_RADIUS_KM = 10 # Maximum distance to display
 
 # Smart Polling Configuration
@@ -87,7 +95,8 @@ Copy `plane_types.json` for detailed aircraft names in console output (e.g., "Bo
 ### Common Issues
 - **No Wi-Fi connection:** Check SSID/password, ensure 2.4GHz network
 - **Blank LCD:** Verify I2C address (try 0x3F if 0x27 doesn't work)
-- **No aircraft data:** Check internet connection and API availability
+- **No aircraft data (API mode):** Check internet connection and API availability
+- **No aircraft data (local mode):** Verify `LOCAL_ADSB_URL` is reachable — try opening it in a browser to confirm JSON is returned
 - **Wrong distance/aircraft:** Verify latitude/longitude coordinates
 
 ### Testing I2C Address
@@ -103,15 +112,24 @@ print([hex(x) for x in i2c.scan()])
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `API_RADIUS_KM` | 7 | How far to search for aircraft |
+| `DATA_SOURCE` | `"api"` | `"api"` for adsb.lol, `"local"` for local receiver |
+| `API_RADIUS_KM` | 7 | How far to search for aircraft (API mode) |
+| `LOCAL_ADSB_URL` | `"http://..."` | URL of local receiver JSON endpoint |
 | `DISPLAY_RADIUS_KM` | 10 | Maximum distance to display |
 | `POLL_SEC` | 4.0 | Update frequency when plane displayed |
 | `NO_PLANE_POLL_SEC` | 30.0 | Update frequency when no planes |
-| `ERROR_POLL_SEC` | 5.0 | Retry delay after API errors |
+| `ERROR_POLL_SEC` | 5.0 | Retry delay after errors |
 | `LCD_I2C_ADDRESS` | 0x27 | I2C address of LCD backpack |
 | `PLANE_TYPES_FILE` | "/plane_types.json" | Aircraft database file path |
 
 ## Changelog
+
+### v1.3
+- Added local ADS-B receiver support (dump1090, readsb, tar1090) — set `DATA_SOURCE = "local"` and point `LOCAL_ADSB_URL` at your receiver
+- SSL is only loaded when using API mode, saving memory in local mode
+- Fixed altitude trend arrow logic (climb/descend arrows now work correctly)
+- Added real bearing calculation in console output
+- General code cleanup
 
 ### v1.2
 Added debug info. Change ```DEBUG_INFO = False``` to ```True``` in the config to enable

@@ -1,7 +1,6 @@
 import json
 import math
 import time
-import ssl
 
 import wifi
 import socketpool
@@ -13,8 +12,20 @@ from lcd.i2c_pcf8574_interface import I2CPCF8574Interface
 
 # ─────────────── USER SETTINGS ─────────────── #
 
-API_RADIUS_KM       = 7     # how far (nm? its weird) to ask the API
-DISPLAY_RADIUS_KM   = 10    # how far (km) to accept & show
+# Data source: "api" for adsb.lol, "local" for a local ADS-B receiver
+DATA_SOURCE         = "api"
+
+# API settings (used when DATA_SOURCE = "api")
+API_RADIUS_KM       = 7       # search radius for API queries
+
+# Local receiver settings (used when DATA_SOURCE = "local")
+# Common URLs:
+#   tar1090 / readsb:  http://<ip>/tar1090/data/aircraft.json
+#   dump1090-fa:        http://<ip>/dump1090-fa/data/aircraft.json
+#   dump1090 (default): http://<ip>:8080/data/aircraft.json
+LOCAL_ADSB_URL      = "http://192.168.1.100/tar1090/data/aircraft.json"
+
+DISPLAY_RADIUS_KM   = 10      # max distance (km) to show on display
 
 WIFI_SSID           = "CHANGEME"
 WIFI_PASSWORD       = "CHANGEME"
@@ -22,14 +33,14 @@ WIFI_PASSWORD       = "CHANGEME"
 LATITUDE            = CHANGEME
 LONGITUDE           = CHANGEME
 
-POLL_SEC            = 4.0    # seconds between polls when a plane is displayed
-NO_PLANE_POLL_SEC   = 30.0   # seconds between polls when no plane is displayed
-ERROR_POLL_SEC      = 5.0    # seconds to wait on error before retrying
+POLL_SEC            = 4.0     # seconds between polls when a plane is displayed
+NO_PLANE_POLL_SEC   = 30.0    # seconds between polls when no plane is displayed
+ERROR_POLL_SEC      = 5.0     # seconds to wait on error before retrying
 
 LCD_I2C_ADDRESS     = 0x27
 PLANE_TYPES_FILE    = "/plane_types.json"
 
-DEBUG_INFO = True   # set True to enable debug messages
+DEBUG_INFO          = True    # set True to enable debug messages
 
 # ─────────────── Arrows ─────────────── #
 
@@ -68,7 +79,7 @@ LEVEL_ARROW = [
 
 # ─────────────── LCD SETUP ─────────────── #
 
-i2c       = board.I2C()  # default 100 kHz on board.SCL & board.SDA
+i2c       = board.I2C()
 interface = I2CPCF8574Interface(i2c, LCD_I2C_ADDRESS)
 lcd       = LCD(interface, num_rows=2, num_cols=16)
 lcd.create_char(0, UP_ARROW)
@@ -80,6 +91,13 @@ lcd.print("    ADSBnear")
 lcd.set_cursor_pos(1, 0)
 lcd.print("  Connecting..")
 
+# ─────────────── SESSION STATS ─────────────── #
+
+_start_time      = time.monotonic()
+_planes_seen     = 0
+_last_seen_flight = None
+_last_seen_time  = None
+
 # ─────────────── DEBUG PRINT ─────────────── #
 
 def debug_print(*args, **kwargs):
@@ -89,12 +107,18 @@ def debug_print(*args, **kwargs):
 # ────────── WIFI & HTTP SESSION ────────── #
 
 wifi.radio.connect(WIFI_SSID, WIFI_PASSWORD)
-pool     = socketpool.SocketPool(wifi.radio)
-requests = adafruit_requests.Session(pool, ssl.create_default_context())
+pool = socketpool.SocketPool(wifi.radio)
+
+if DATA_SOURCE == "api":
+    import ssl
+    ssl_ctx = ssl.create_default_context()
+else:
+    ssl_ctx = None
+requests = adafruit_requests.Session(pool, ssl_ctx)
+
 debug_print("Connected to Wi-Fi")
 debug_print("My IP address:", wifi.radio.ipv4_address)
-debug_print("Router:", wifi.radio.ipv4_gateway)
-debug_print("DNS:", wifi.radio.ipv4_dns)
+debug_print("Data source:", DATA_SOURCE)
 
 # ──────── PLANE TYPE LOOKUP ────────── #
 
@@ -121,9 +145,31 @@ def gc_distance_km(lat1, lon1, lat2, lon2):
     if math.isnan(lat2) or math.isnan(lon2):
         return float('nan')
     phi1, phi2, d_lambda = map(math.radians, (lat1, lat2, lon2 - lon1))
-    a = (math.sin((phi2 - phi1)/2)**2
-         + math.cos(phi1)*math.cos(phi2)*math.sin(d_lambda/2)**2)
+    a = (math.sin((phi2 - phi1) / 2) ** 2
+         + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2)
     return 2 * EARTH_R * math.asin(math.sqrt(a))
+
+def bearing_deg(lat1, lon1, lat2, lon2):
+    if math.isnan(lat2) or math.isnan(lon2):
+        return float('nan')
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    d_lambda = math.radians(lon2 - lon1)
+    x = math.sin(d_lambda) * math.cos(phi2)
+    y = (math.cos(phi1) * math.sin(phi2)
+         - math.sin(phi1) * math.cos(phi2) * math.cos(d_lambda))
+    return (math.degrees(math.atan2(x, y)) + 360) % 360
+
+def fmt_duration(seconds):
+    minutes = int(seconds) // 60
+    if minutes < 60:
+        return f"{minutes}m"
+    hours = minutes // 60
+    mins = minutes % 60
+    if hours < 24:
+        return f"{hours}h{mins:02d}m"
+    days = hours // 24
+    hrs = hours % 24
+    return f"{days}d{hrs}h"
 
 def ft_to_m(ft):
     return ft * 0.3048
@@ -134,7 +180,7 @@ def kn_to_kmh(kn):
 def api_url():
     return f"https://api.adsb.lol/v2/closest/{LATITUDE:.6f}/{LONGITUDE:.6f}/{API_RADIUS_KM}"
 
-# ──────── LCD TEXT HELPERS (16×2) ───────── #
+# ──────── LCD TEXT HELPERS (16x2) ───────── #
 
 def pad16(text):
     text = "" if text is None else str(text)
@@ -188,26 +234,20 @@ def format_lcd(ac):
     alt_m  = ft_to_m(alt_ft)
     gs_kmh = kn_to_kmh(gs_kn)
 
-    # reset arrow if new flight
     arrow = chr(2)  # default level
     if flt_raw != _last_flight:
         _last_alt = None
-    else:
-        if _last_alt is not None:
-            delta = alt_m - _last_alt
-            if delta > 20:      # climbing more than 20 m
-                arrow = chr(0)  # up
-        elif delta < -20:   # descending more than 20 m
+    elif _last_alt is not None:
+        delta = alt_m - _last_alt
+        if delta > 20:
+            arrow = chr(0)  # up
+        elif delta < -20:
             arrow = chr(1)  # down
-        else:
-            # keep previous arrow if we were already climbing/descending
-            if arrow not in (chr(0), chr(1)):
-                arrow = chr(2)
 
     _last_alt = alt_m
     _last_flight = flt_raw
 
-    line2 = f"{int(alt_m+0.5):5d}m{arrow} {int(gs_kmh+0.5):3d}km/h"
+    line2 = f"{int(alt_m + 0.5):5d}m{arrow} {int(gs_kmh + 0.5):3d}km/h"
     line2 = pad16(line2)
 
     return line1, line2
@@ -238,44 +278,98 @@ def format_console(ac):
     def fmt(x):
         return "---" if math.isnan(x) else f"{x:5.1f}"
 
-    brg = "---"
-    if not math.isnan(dist_km):
-        brg = f"{math.degrees(math.atan2(0, 0)):.1f}°"  # placeholder
+    brg = bearing_deg(LATITUDE, LONGITUDE, lat, lon)
+    brg_str = "---" if math.isnan(brg) else f"{brg:05.1f}\u00b0"
+
+    dst_str = fmt(dist_km) + " km"
+    if not math.isnan(api_dst):
+        dst_str += f" (API {fmt(api_dst)})"
 
     return (
         f"{flt:<8}  {type_str}{reg:<6}  "
-      + f"{fmt(dist_km)} km (API {fmt(api_dst)})  "
-      + f"{brg}  "
+      + f"{dst_str}  {brg_str}  "
       + f"{alt_ft:5.0f} ft ({alt_m:4.0f} m)  "
       + f"{gs_kn:3.0f} kn / {gs_kmh:3.0f} km/h"
     )
 
-# ──────────────── MAIN LOOP ────────────────── #
+# ──────────────── DATA FETCHING ────────────────── #
 
-def fetch_closest():
+def fetch_aircraft():
+    """Fetch nearby aircraft, returned as a list (closest first)."""
+    if DATA_SOURCE == "local":
+        return _fetch_local()
+    return _fetch_api()
+
+def _fetch_api():
     url = api_url()
-    debug_print("Fetching URL:", url)
+    debug_print("Fetching:", url)
     response = requests.get(url)
-    debug_print("Response status:", response.status_code)
-    return response.json()
+    debug_print("Status:", response.status_code)
+    data = response.json()
+    return data.get("ac") or []
+
+def _fetch_local():
+    debug_print("Fetching:", LOCAL_ADSB_URL)
+    response = requests.get(LOCAL_ADSB_URL)
+    debug_print("Status:", response.status_code)
+    data = response.json()
+    aircraft_list = data.get("aircraft") or []
+
+    # filter to aircraft with valid positions within range, sort by distance
+    nearby = []
+    for ac in aircraft_list:
+        lat = to_float(ac.get("lat"))
+        lon = to_float(ac.get("lon"))
+        if math.isnan(lat) or math.isnan(lon):
+            continue
+        dist = gc_distance_km(LATITUDE, LONGITUDE, lat, lon)
+        if not math.isnan(dist) and dist <= DISPLAY_RADIUS_KM:
+            nearby.append((dist, ac))
+
+    nearby.sort(key=lambda x: x[0])
+    return [ac for _, ac in nearby]
+
+# ────────── DISPLAY HELPERS ────────── #
+
+def show_no_planes():
+    now = time.monotonic()
+    uptime = now - _start_time
+
+    if _last_seen_flight:
+        ago = fmt_duration(now - _last_seen_time)
+        left1 = f"Last:{_last_seen_flight}"
+        gap1 = max(16 - len(left1) - len(ago), 1)
+        line1 = (left1 + " " * gap1 + ago)[:16]
+    else:
+        line1 = "  Scanning...   "
+
+    left2 = f"{_planes_seen} seen"
+    right2 = f"Up:{fmt_duration(uptime)}"
+    gap2 = max(16 - len(left2) - len(right2), 1)
+    line2 = (left2 + " " * gap2 + right2)[:16]
+
+    lcd.clear()
+    lcd.print(pad16(line1))
+    lcd.set_cursor_pos(1, 0)
+    lcd.print(pad16(line2))
+
+# ──────────────── MAIN LOOP ────────────────── #
 
 while True:
     try:
-        data = fetch_closest()
+        aircraft = fetch_aircraft()
         now = time.localtime()
         timestr = f"{now[3]:02d}:{now[4]:02d}:{now[5]:02d}"
 
-        # assume no plane until we display one
         plane_displayed = False
 
-        if data and data.get("ac"):
-            ac = data["ac"][0]
+        if aircraft:
+            ac = aircraft[0]
             lat = to_float(ac.get("lat"))
             lon = to_float(ac.get("lon"))
             dist = gc_distance_km(LATITUDE, LONGITUDE, lat, lon)
 
             if not math.isnan(dist) and dist <= DISPLAY_RADIUS_KM:
-                # display the nearest aircraft
                 line1, line2 = format_lcd(ac)
                 lcd.clear()
                 lcd.print(line1)
@@ -283,35 +377,26 @@ while True:
                 lcd.print(line2)
                 print(timestr, format_console(ac))
                 plane_displayed = True
-            else:
-                # no aircraft in display radius
-                lcd.clear()
-                lcd.print("No planes within")
-                lcd.set_cursor_pos(1, 0)
-                lcd.print(f"{DISPLAY_RADIUS_KM}km | Scanning")
-                print(timestr, f"No aircraft within {DISPLAY_RADIUS_KM} km")
-        else:
-            # API returned no data or no 'ac' list
-            lcd.clear()
-            lcd.print("No planes within")
-            lcd.set_cursor_pos(1, 0)
-            lcd.print(f"{DISPLAY_RADIUS_KM}km | Scanning")
+
+                flt_name = (ac.get("flight") or "????").strip()
+                if flt_name != _last_seen_flight:
+                    _planes_seen += 1
+                _last_seen_flight = flt_name
+                _last_seen_time = time.monotonic()
+
+        if not plane_displayed:
+            show_no_planes()
             print(timestr, f"No aircraft within {DISPLAY_RADIUS_KM} km")
 
-        # choose sleep interval based on whether we showed a plane
-        if plane_displayed:
-            next_poll = POLL_SEC
-        else:
-            next_poll = NO_PLANE_POLL_SEC
+        next_poll = POLL_SEC if plane_displayed else NO_PLANE_POLL_SEC
 
     except Exception as err:
-        debug_print("Exception details:", repr(err))
-        print("ERROR:", err)  # keep this visible even if DEBUG_INFO = False
+        debug_print("Exception:", repr(err))
+        print("ERROR:", err)
         lcd.clear()
-        lcd.print("API / Wi-Fi Err")
+        lcd.print("Connection Err")
         lcd.set_cursor_pos(1, 0)
         lcd.print("Retrying...")
         next_poll = ERROR_POLL_SEC
 
-    # sleep before next API call
     time.sleep(next_poll)
