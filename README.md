@@ -124,6 +124,9 @@ print([hex(x) for x in i2c.scan()])
 
 ## Changelog
 
+### v1.4
+- In local mode, the idle screen now shows live feeder message rate (e.g. `2.4msg/s`) instead of uptime when no aircraft are in range
+
 ### v1.3
 - Added local ADS-B receiver support (dump1090, readsb, tar1090) — set `DATA_SOURCE = "local"` and point `LOCAL_ADSB_URL` at your receiver
 - SSL is only loaded when using API mode, saving memory in local mode

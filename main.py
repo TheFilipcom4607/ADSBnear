@@ -98,6 +98,10 @@ _planes_seen     = 0
 _last_seen_flight = None
 _last_seen_time  = None
 
+_last_msg_count  = None   # last raw message counter from local receiver
+_last_msg_time   = None   # time.monotonic() when that count was sampled
+_msg_rate        = None   # computed messages/sec (float)
+
 # ─────────────── DEBUG PRINT ─────────────── #
 
 def debug_print(*args, **kwargs):
@@ -309,11 +313,23 @@ def _fetch_api():
     return data.get("ac") or []
 
 def _fetch_local():
+    global _last_msg_count, _last_msg_time, _msg_rate
     debug_print("Fetching:", LOCAL_ADSB_URL)
     response = requests.get(LOCAL_ADSB_URL)
     debug_print("Status:", response.status_code)
     data = response.json()
     aircraft_list = data.get("aircraft") or []
+
+    # track message rate from the receiver's cumulative counter
+    raw_count = data.get("messages")
+    now = time.monotonic()
+    if raw_count is not None:
+        if _last_msg_count is not None and _last_msg_time is not None:
+            elapsed = now - _last_msg_time
+            if elapsed > 0:
+                _msg_rate = (raw_count - _last_msg_count) / elapsed
+        _last_msg_count = raw_count
+        _last_msg_time = now
 
     # filter to aircraft with valid positions within range, sort by distance
     nearby = []
@@ -344,7 +360,10 @@ def show_no_planes():
         line1 = "  Scanning...   "
 
     left2 = f"{_planes_seen} seen"
-    right2 = f"Up:{fmt_duration(uptime)}"
+    if DATA_SOURCE == "local" and _msg_rate is not None:
+        right2 = f"{_msg_rate:.1f}msg/s"
+    else:
+        right2 = f"Up:{fmt_duration(uptime)}"
     gap2 = max(16 - len(left2) - len(right2), 1)
     line2 = (left2 + " " * gap2 + right2)[:16]
 
