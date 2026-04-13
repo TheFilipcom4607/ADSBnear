@@ -25,6 +25,7 @@ API_RADIUS_KM       = 7       # search radius for API queries
 #   dump1090 (default): http://<ip>:8080/data/aircraft.json
 LOCAL_ADSB_URL      = "http://192.168.1.100/tar1090/data/aircraft.json"
 LOCAL_AC_MSG_RATE   = False   # show per-aircraft msg/s instead of speed (local mode only)
+ALTERNATE_ROUTE     = False   # alternate line 1 between callsign and route every 2s
 
 DISPLAY_RADIUS_KM   = 10      # max distance (km) to show on display
 
@@ -198,6 +199,38 @@ def pad16(text):
 _last_alt = None
 _last_flight = None
 
+def get_route_str(ac):
+    """Return a ≤7-char route label like 'WAW-CDG', or None if unavailable."""
+    # pre-formatted route field (e.g. adsb.lol, ADS-B Exchange)
+    route = (ac.get("route") or "").strip()
+    if route:
+        parts = route.split("-")
+        if len(parts) >= 2:
+            return f"{parts[0][:3]}-{parts[-1][:3]}"
+        return route[:7]
+    # separate origin/destination fields (tar1090, readsb with route DB)
+    dep = (ac.get("orig") or ac.get("from") or ac.get("dep") or "").strip()
+    dst = (ac.get("dest") or ac.get("to")   or ac.get("arr") or "").strip()
+    if dep and dst:
+        return f"{dep[:3]}-{dst[:3]}"
+    return None
+
+
+def _build_line1(label, dist_str, type_code):
+    """Centre-pad a 16-char LCD line: '<label> <dist>km <type>'."""
+    label = label[:7]
+    base  = f"{label} {dist_str}km {type_code}"
+    while len(base) > 16 and len(label) > 1:
+        label = label[:-1]
+        base  = f"{label} {dist_str}km {type_code}"
+    if len(base) < 16:
+        pad_total = 16 - len(base)
+        left_pad  = pad_total // 2
+        right_pad = pad_total - left_pad
+        return " " * left_pad + base + " " * right_pad
+    return base[:16]
+
+
 def format_lcd(ac, ac_msg_rate=None):
     global _last_alt, _last_flight
 
@@ -224,18 +257,15 @@ def format_lcd(ac, ac_msg_rate=None):
     else:
         type_code = raw_type + "?" * (4 - len(raw_type))
 
-    base = f"{flt_raw} {dist_str}km {type_code}"
-    while len(base) > 16 and len(flt_raw) > 1:
-        flt_raw = flt_raw[:-1]
-        base = f"{flt_raw} {dist_str}km {type_code}"
+    line1 = _build_line1(flt_raw, dist_str, type_code)
 
-    if len(base) < 16:
-        pad_total = 16 - len(base)
-        left_pad = pad_total // 2
-        right_pad = pad_total - left_pad
-        line1 = " " * left_pad + base + " " * right_pad
-    else:
-        line1 = base[:16]
+    # alternate line1 with route if enabled and route data is available
+    route_line1 = None
+    if ALTERNATE_ROUTE:
+        route = get_route_str(ac)
+        debug_print("Route:", route)
+        if route:
+            route_line1 = _build_line1(route, dist_str, type_code)
 
     # altitude & speed line with trend arrow
     alt_m  = ft_to_m(alt_ft)
@@ -264,7 +294,7 @@ def format_lcd(ac, ac_msg_rate=None):
     line2 = f"{int(alt_m + 0.5):5d}m{arrow} {spd_str}"
     line2 = pad16(line2)
 
-    return line1, line2
+    return line1, line2, route_line1
 
 
 def format_console(ac):
@@ -385,12 +415,14 @@ def show_no_planes():
 # ──────────────── MAIN LOOP ────────────────── #
 
 while True:
+    plane_displayed = False
+    route_line1     = None
+    line2           = None
+
     try:
         aircraft = fetch_aircraft()
         now = time.localtime()
         timestr = f"{now[3]:02d}:{now[4]:02d}:{now[5]:02d}"
-
-        plane_displayed = False
 
         if aircraft:
             ac = aircraft[0]
@@ -411,7 +443,7 @@ while True:
                             ac_msg_rate = (ac_count - prev_count) / elapsed
                     if ac_count is not None:
                         _ac_msg_tracker[icao] = (ac_count, now_mono)
-                line1, line2 = format_lcd(ac, ac_msg_rate)
+                line1, line2, route_line1 = format_lcd(ac, ac_msg_rate)
                 lcd.clear()
                 lcd.print(line1)
                 lcd.set_cursor_pos(1, 0)
@@ -440,4 +472,13 @@ while True:
         lcd.print("Retrying...")
         next_poll = ERROR_POLL_SEC
 
-    time.sleep(next_poll)
+    # alternate between callsign and route on line 1 during the poll interval
+    if ALTERNATE_ROUTE and plane_displayed and route_line1 and line2:
+        time.sleep(2.0)
+        lcd.clear()
+        lcd.print(route_line1)
+        lcd.set_cursor_pos(1, 0)
+        lcd.print(line2)
+        time.sleep(max(0.0, next_poll - 2.0))
+    else:
+        time.sleep(next_poll)

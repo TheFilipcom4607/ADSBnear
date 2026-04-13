@@ -116,6 +116,7 @@ print([hex(x) for x in i2c.scan()])
 | `API_RADIUS_KM` | 7 | How far to search for aircraft (API mode) |
 | `LOCAL_ADSB_URL` | `"http://..."` | URL of local receiver JSON endpoint |
 | `LOCAL_AC_MSG_RATE` | `False` | Show per-aircraft msg/s instead of speed (local mode only) |
+| `ALTERNATE_ROUTE` | `False` | Alternate line 1 between callsign and route every 2 seconds |
 | `DISPLAY_RADIUS_KM` | 10 | Maximum distance to display |
 | `POLL_SEC` | 4.0 | Update frequency when plane displayed |
 | `NO_PLANE_POLL_SEC` | 30.0 | Update frequency when no planes |
@@ -124,6 +125,9 @@ print([hex(x) for x in i2c.scan()])
 | `PLANE_TYPES_FILE` | "/plane_types.json" | Aircraft database file path |
 
 ## Changelog
+
+### v1.6
+- Added `ALTERNATE_ROUTE` config option: when enabled, line 1 alternates every 2 seconds between the callsign (e.g. `SAS2945`) and the route (e.g. `WAW-CDG`). Works with any data source that provides route, origin/destination fields. Falls back to callsign-only if no route data is present
 
 ### v1.5
 - Added `LOCAL_AC_MSG_RATE` config option: in local mode, replaces the speed field on the aircraft display line with the per-aircraft message rate (e.g. `2.4msg/s`) received from that specific transponder
